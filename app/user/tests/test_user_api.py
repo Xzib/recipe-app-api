@@ -149,7 +149,7 @@ class PrivateUserApiTests(TestCase):
             'name': 'new_name',
             'password': 'pass1234',
         }
-        
+
         res = self.client.patch(ME_URL, payload)
 
         self.user.refresh_from_db()
