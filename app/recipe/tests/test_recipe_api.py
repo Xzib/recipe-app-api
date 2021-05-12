@@ -1,4 +1,4 @@
-from django.db import transaction
+from django.db import transaction, IntegrityError
 
 import tempfile
 import os
@@ -96,7 +96,7 @@ class PrivateRecipeApiTest(TestCase):
 
         res = self.client.get(RECIPES_URL)
 
-        recipe = Recipe.objects.filter(user=self.user).order_by('-id')
+        recipe = Recipe.objects.filter(user=self.user)
         serializer = RecipeSerailizer(recipe, many=True)
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
@@ -233,14 +233,25 @@ class RecipeImageUploadTest(TransactionTestCase):
     def test_upload_image(self):
         """Test uploading an image to recipe"""
         url = image_upload_url(self.recipe.id)
+        # temp_file = tempfile.NamedTemporaryFile(suffix='.jpg')    
+        # try:
+        #     img = Image.new('RGB', (10, 10))
+        #     img.save(temp_file, format='JPEG')
+        #     temp_file.seek(0)
+        #     res = self.client.post(url, {'image':temp_file}, format='multipart')
+        # except IntegrityError:
+        #     pass
+        # finally:
+        #     temp_file.close()
+        
         with tempfile.NamedTemporaryFile(suffix='.jpg') as ntf:
-            img = Image.new('RGB', (10,10))
+            img = Image.new('RGB', (10, 10))
             img.save(ntf, format='JPEG')
             ntf.seek(0)
             res = self.client.post(url, {'image':ntf}, format='multipart')
         
-        # with transaction.atomic():
         self.recipe.refresh_from_db()
+        print(res)
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertIn('image', res.data)
         self.assertTrue(os.path.exists(self.recipe.image.path))
