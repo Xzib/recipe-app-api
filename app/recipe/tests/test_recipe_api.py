@@ -216,7 +216,7 @@ class PrivateRecipeApiTest(TestCase):
         self.assertEqual(len(tags), 0)
 
 
-class RecipeImageUploadTest(TransactionTestCase):
+class RecipeImageUploadTest(TestCase):
 
     def setUp(self):
         self.client = APIClient()
@@ -249,9 +249,9 @@ class RecipeImageUploadTest(TransactionTestCase):
             img.save(ntf, format='JPEG')
             ntf.seek(0)
             res = self.client.post(url, {'image':ntf}, format='multipart')
+            
         
         self.recipe.refresh_from_db()
-        print(res)
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertIn('image', res.data)
         self.assertTrue(os.path.exists(self.recipe.image.path))
