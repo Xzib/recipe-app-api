@@ -1,12 +1,10 @@
-from django.db import transaction, IntegrityError
-
 import tempfile
 import os
 
 from PIL import Image
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase, TransactionTestCase
+from django.test import TestCase
 from django.urls import reverse
 
 from rest_framework import status
@@ -21,6 +19,7 @@ RECIPES_URL = reverse("recipe:recipe-list")
 def image_upload_url(recipe_id):
     """return URL for recipe image"""
     return reverse('recipe:recipe-upload-image', args=[recipe_id])
+
 
 def detail_url(recipe_id):
     """return recipe detail url"""
@@ -226,31 +225,21 @@ class RecipeImageUploadTest(TestCase):
         )
         self.client.force_authenticate(self.user)
         self.recipe = sample_recipe(user=self.user)
-    
+
     def tearDown(self):
         self.recipe.image.delete()
-    
+
     def test_upload_image(self):
         """Test uploading an image to recipe"""
         url = image_upload_url(self.recipe.id)
-        # temp_file = tempfile.NamedTemporaryFile(suffix='.jpg')    
-        # try:
-        #     img = Image.new('RGB', (10, 10))
-        #     img.save(temp_file, format='JPEG')
-        #     temp_file.seek(0)
-        #     res = self.client.post(url, {'image':temp_file}, format='multipart')
-        # except IntegrityError:
-        #     pass
-        # finally:
-        #     temp_file.close()
-        
+
         with tempfile.NamedTemporaryFile(suffix='.jpg') as ntf:
             img = Image.new('RGB', (10, 10))
             img.save(ntf, format='JPEG')
             ntf.seek(0)
-            res = self.client.post(url, {'image':ntf}, format='multipart')
-            
-        
+            res = self.client.post(url, {'image': ntf},
+                                   format='multipart')
+
         self.recipe.refresh_from_db()
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertIn('image', res.data)
@@ -259,6 +248,53 @@ class RecipeImageUploadTest(TestCase):
     def test_upload_image_bad_request(self):
         """test uploading an invalid image"""
         url = image_upload_url(self.recipe.id)
-        res = self.client.post(url, {'image':'not an image'}, format='multipart')
+        res = self.client.post(url, {'image': 'not an image'},
+                               format='multipart')
 
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_filter_recipe_with_tags(self):
+        """Test filtering recipe by tag ids"""
+        recipe1 = sample_recipe(user=self.user, title="bihari boti")
+        recipe2 = sample_recipe(user=self.user, title="Chicken Qorma")
+        tag1 = sample_tag(user=self.user, name='chicken')
+        tag2 = sample_tag(user=self.user, name='beef')
+        recipe1.tags.add(tag1)
+        recipe2.tags.add(tag2)
+        recipe3 = sample_recipe(user=self.user, title="palak paneer")
+
+        res = self.client.get(
+            RECIPES_URL,
+            {'tags': f"{tag1.id},{tag2.id}"}
+        )
+
+        serializer1 = RecipeSerailizer(recipe1)
+        serializer2 = RecipeSerailizer(recipe2)
+        serializer3 = RecipeSerailizer(recipe3)
+
+        self.assertIn(serializer1.data, res.data)
+        self.assertIn(serializer2.data, res.data)
+        self.assertNotIn(serializer3.data, res.data)
+
+    def test_filter_recipe_ingredients(self):
+        """Test filtering recipe by ingredients"""
+        recipe1 = sample_recipe(user=self.user, title="palak aloo")
+        recipe2 = sample_recipe(user=self.user, title='paneer salan')
+        ingredient1 = sample_ingredient(user=self.user, name='palak')
+        ingredient2 = sample_ingredient(user=self.user, name='paneer')
+        recipe1.ingredients.add(ingredient1)
+        recipe2.ingredients.add(ingredient2)
+        recipe3 = sample_recipe(user=self.user, title='methi aalo')
+
+        res = self.client.get(
+            RECIPES_URL,
+            {'ingredients': f"{ingredient1.id},{ingredient2.id}"}
+        )
+
+        serializer1 = RecipeSerailizer(recipe1)
+        serializer2 = RecipeSerailizer(recipe2)
+        serializer3 = RecipeSerailizer(recipe3)
+
+        self.assertIn(serializer1.data, res.data)
+        self.assertIn(serializer2.data, res.data)
+        self.assertNotIn(serializer3.data, res.data)
